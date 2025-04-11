@@ -4,12 +4,13 @@ from rembg import remove
 import numpy as np
 import tensorflow as tf
 import io
+import os
 
 # Define class names
 class_names = ['bay leaf', 'cardamom', 'cinnamon', 'garlic', 'ginger', 
                'green chili', 'onion', 'red chili', 'star anise']
 
-# Load your trained model (adjust file name if needed)
+# Load your trained model (adjust the file name as needed)
 model = tf.keras.models.load_model("spicy_model.keras")
 
 # Initialize Flask app
@@ -52,3 +53,7 @@ def predict():
 def home():
     return '🧪 Spicy Classifier Backend is running!'
 
+if __name__ == '__main__':
+    # Get port from environment variables (for Render), or default to 5000
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
