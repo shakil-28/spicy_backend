@@ -1,66 +1,54 @@
 from flask import Flask, request, jsonify
-import tensorflow as tf
-import numpy as np
 from PIL import Image
 from rembg import remove
+import numpy as np
+import tensorflow as tf
 import io
-import base64
-import os
+
+# Define class names
+class_names = ['bay leaf', 'cardamom', 'cinnamon', 'garlic', 'ginger', 
+               'green chili', 'onion', 'red chili', 'star anise']
+
+# Load your trained model (adjust file name if needed)
+model = tf.keras.models.load_model("spicy_model.keras")
 
 # Initialize Flask app
 app = Flask(__name__)
 
-# Load the trained model
-model = tf.keras.models.load_model("spicy_model.keras")
-
-# Define your class names
-class_names = [
-    'bay leaf',
-    'cardamom',
-    'cinnamon',
-    'garlic',
-    'ginger',
-    'green chili',
-    'onion',
-    'red chili',
-    'star anise'
-]
-
-# Preprocess the image
-def preprocess_image(image_bytes):
-    # Remove background
-    input_image = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
-    output_image = remove(input_image)
-    rgb_image = output_image.convert("RGB")
-
-    # Resize and normalize
-    resized_image = rgb_image.resize((128, 128))
-    image_array = np.array(resized_image) / 255.0
-    return np.expand_dims(image_array, axis=0)
-
 # Prediction route
 @app.route('/predict', methods=['POST'])
 def predict():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    file = request.files['file']
+    
     try:
-        data = request.json.get('image')
-        if not data:
-            return jsonify({'error': 'No image provided'}), 400
+        # Read image and remove background
+        input_image = Image.open(file.stream).convert("RGBA")
+        no_bg_image = remove(input_image)
 
-        image_bytes = base64.b64decode(data)
-        image = preprocess_image(image_bytes)
+        # Convert to RGB and resize
+        image = no_bg_image.convert("RGB")
+        image = image.resize((128, 128))
+        image_array = np.array(image) / 255.0  # Normalize
+        image_array = np.expand_dims(image_array, axis=0)  # Add batch dimension
 
-        predictions = model.predict(image)
-        predicted_index = int(np.argmax(predictions))
-        predicted_label = class_names[predicted_index]
+        # Predict
+        predictions = model.predict(image_array)
+        predicted_class = class_names[np.argmax(predictions[0])]
+        confidence = float(np.max(predictions[0]))
 
         return jsonify({
-            'prediction': predicted_label,
-            'confidence': float(np.max(predictions))
+            'predicted_class': predicted_class,
+            'confidence': round(confidence * 100, 2)
         })
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Run server locally (won't affect Render)
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
+
+@app.route('/')
+def home():
+    return '🧪 Spicy Classifier Backend is running!'
+
