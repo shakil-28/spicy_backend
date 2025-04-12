@@ -3,20 +3,26 @@ from PIL import Image
 from rembg import remove
 import numpy as np
 import tensorflow as tf
-import io
 import os
 
-# Define class names
-class_names = ['bay leaf', 'cardamom', 'cinnamon', 'garlic', 'ginger', 
-               'green chili', 'onion', 'red chili', 'star anise']
-
-# Load your trained model (adjust the file name as needed)
-model = tf.keras.models.load_model("spicy_model.keras")
-
-# Initialize Flask app
 app = Flask(__name__)
 
-# Prediction route
+# Define class names
+class_names = ['Bay leaf', 'Cardamom', 'Cinnamon', 'Garlic', 'Ginger', 
+               'Green chili', 'Onion', 'Red chili', 'Star anise']
+
+# Load model
+model = tf.keras.models.load_model("spicy_model.keras")
+
+def preprocess_image(image):
+    """Process image for model prediction"""
+    image = image.convert("RGBA")
+    no_bg_image = remove(image)
+    rgb_image = no_bg_image.convert("RGB")
+    rgb_image = rgb_image.resize((128, 128))
+    image_array = np.array(rgb_image) / 255.0
+    return np.expand_dims(image_array, axis=0)
+
 @app.route('/predict', methods=['POST'])
 def predict():
     if 'file' not in request.files:
@@ -25,35 +31,29 @@ def predict():
     file = request.files['file']
     
     try:
-        # Read image and remove background
-        input_image = Image.open(file.stream).convert("RGBA")
-        no_bg_image = remove(input_image)
-
-        # Convert to RGB and resize
-        image = no_bg_image.convert("RGB")
-        image = image.resize((128, 128))
-        image_array = np.array(image) / 255.0  # Normalize
-        image_array = np.expand_dims(image_array, axis=0)  # Add batch dimension
-
-        # Predict
-        predictions = model.predict(image_array)
-        predicted_class = class_names[np.argmax(predictions[0])]
-        confidence = float(np.max(predictions[0]))
-
+        image = Image.open(file.stream)
+        processed_image = preprocess_image(image)
+        
+        predictions = model.predict(processed_image)
+        predicted_index = np.argmax(predictions[0])
+        
         return jsonify({
-            'predicted_class': predicted_class,
-            'confidence': round(confidence * 100, 2)
+            'predicted_class': class_names[predicted_index],
+            'confidence': round(float(np.max(predictions[0])) * 100, 2)
         })
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
 @app.route('/')
-def home():
-    return '🧪 Spicy Classifier Backend is running!'
+def health_check():
+    return jsonify({
+        'status': 'healthy',
+        'message': 'Spice Classifier API is running',
+        'model_loaded': True,
+        'ready_for_predictions': True
+    })
 
 if __name__ == '__main__':
-    # Get port from environment variables (for Render), or default to 5000
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)

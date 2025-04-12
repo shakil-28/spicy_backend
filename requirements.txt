@@ -1,6 +1,7 @@
-Flask
-rembg
-Pillow
-tensorflow
-gunicorn
-onnxruntime
+flask==3.0.2
+pillow==10.2.0
+rembg==2.0.56
+numpy==1.26.4
+tensorflow==2.16.1
+onnxruntime==1.17.1
+gunicorn==21.2.0
